@@ -3,98 +3,82 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, transforms
 from sklearn.metrics.cluster import adjusted_rand_score, normalized_mutual_info_score
-import numpy as np
 import argparse
 
 
-# USPS数据预处理
-def testset_USPS():
-    transform_test = transforms.Compose([
-        transforms.Resize((32, 32)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
-    ])
-    return datasets.USPS(root='./data', train=False, download=True, transform=transform_test)
+# 数据预处理
+
+def testset(dataset):
+    if dataset == "USPS":
+        transform_test = transforms.Compose([
+            transforms.Resize((32, 32)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])
+        ])
+        return datasets.USPS(root='./data', train=False, download=True, transform=transform_test)
+    if dataset == "MNIST":
+        transform_test = transforms.Compose([
+            transforms.Resize((32, 32)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])
+        ])
+        return datasets.MNIST(root='./data', train=False, download=True, transform=transform_test)
+    if dataset == "SVHN":
+        transform_test = transforms.Compose([
+            transforms.Resize((32, 32)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])
+        ])
+        return datasets.SVHN(root='./data', split='test', download=True, transform=transform_test)
 
 
-def trainset_USPS():
-    transform_train = transforms.Compose([
-        transforms.Resize((32, 32)),
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
-    ])
-    return datasets.USPS(root='./data', train=True, download=True, transform=transform_train)
+def trainset(dataset):
+    if dataset == "USPS":
+        transform_train = transforms.Compose([
+            transforms.Resize((32, 32)),
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])
+        ])
+        return datasets.USPS(root='./data', train=True, download=True, transform=transform_train)
+    if dataset == "MNIST":
+        transform_train = transforms.Compose([
+            transforms.Resize((28, 28)),
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])
+        ])
+        return datasets.MNIST(root='./data', train=True, download=True, transform=transform_train)
+    if dataset == "SVHN":
+        transform_train = transforms.Compose([
+            transforms.Resize((32, 32)),
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])
+        ])
+        return datasets.SVHN(root='./data', split='train', download=True, transform=transform_train)
 
 
-# 加载USPS数据集
-def testloader_USPS():
-    return torch.utils.data.DataLoader(testset_USPS(), batch_size=128, shuffle=False, num_workers=2)
+# 加载数据集
+def testloader(dataset):
+    if dataset == "USPS":
+        return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
+    if dataset == "MNIST":
+        return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
+    if dataset == "SVHN":
+        return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
 
 
-def trainloader_USPS():
-    return torch.utils.data.DataLoader(trainset_USPS(), batch_size=128, shuffle=True, num_workers=2)
-
-
-# MNIST数据预处理
-def testset_MNIST():
-    transform_test = transforms.Compose([
-        transforms.Resize((32, 32)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
-    ])
-    return datasets.MNIST(root='./data', train=False, download=True, transform=transform_test)
-
-
-def trainset_MNIST():
-    transform_train = transforms.Compose([
-        transforms.Resize((28, 28)),
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
-    ])
-    return datasets.MNIST(root='./data', train=True, download=True, transform=transform_train)
-
-
-# 加载MNIST数据集
-def testloader_MNIST():
-    return torch.utils.data.DataLoader(testset_MNIST(), batch_size=128, shuffle=False, num_workers=2)
-
-
-def trainloader_MNIST():
-    return torch.utils.data.DataLoader(trainset_MNIST(), batch_size=128, shuffle=True, num_workers=2)
-
-
-# SVHN数据预处理
-def testset_SVHN():
-    transform_test = transforms.Compose([
-        transforms.Resize((32, 32)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
-    ])
-    return datasets.SVHN(root='./data', split='test', download=True, transform=transform_test)
-
-
-def trainset_SVHN():
-    transform_train = transforms.Compose([
-        transforms.Resize((32, 32)),
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
-    ])
-    return datasets.SVHN(root='./data', split='train', download=True, transform=transform_train)
-
-
-# 加载SVHN数据集
-def testloader_SVHN():
-    return torch.utils.data.DataLoader(testset_SVHN(), batch_size=128, shuffle=False, num_workers=2)
-
-
-def trainloader_SVHN():
-    return torch.utils.data.DataLoader(testset_SVHN(), batch_size=128, shuffle=False, num_workers=2)
+def trainloader(dataset):
+    if dataset == "USPS":
+        return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=True, num_workers=2)
+    if dataset == "MNIST":
+        return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=True, num_workers=2)
+    if dataset == "SVHN":
+        return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=False, num_workers=2)
 
 
 # 定义1色阶DCN模型
@@ -202,7 +186,7 @@ class DCN_3(nn.Module):
 
 
 # 训练模型
-def train(model, trainloader, testloader, criterion, optimizer, testset, device,e):
+def train(model, trainloader, testloader, criterion, optimizer, testset, device, e):
     for epoch in range(e):
         running_loss = 0.0
         correct = 0
@@ -274,8 +258,7 @@ def test(model, testloader, testset, device):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='DCN',
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default="MNIST", choices=["MNIST", "USPS", "SVHN"])
     parser.add_argument('--lr', default=0.001, type=int)
     parser.add_argument('--momentum', default=0.9, type=int)
@@ -291,26 +274,17 @@ if __name__ == '__main__':
     epoch = args.epoch
     if args.dataset == "USPS":
         model = DCN_1().to(device)
-        if args.dataset == "MNIST":
-            model = DCN_1().to(device)
-            if args.dataset == "SVHN":
-                model = DCN_3().to(device)
-            else:
-                print("invalid dataset")
-                exit()
+    elif args.dataset == "MNIST":
+        model = DCN_1().to(device)
+    elif args.dataset == "SVHN":
+        model = DCN_3().to(device)
+    else:
+        print("invalid dataset")
+        exit()
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
-    if args.dataset == "USPS":
-        trainloader = trainloader_USPS()
-        testloader = testloader_USPS()
-        testset = testset_USPS()
-    if args.dataset == "MNIST":
-        trainloader = trainloader_MNIST()
-        testloader = testloader_MNIST()
-        testset = testset_MNIST()
-    if args.dataset == "SVHN":
-        trainloader = trainloader_SVHN()
-        testloader = testloader_SVHN()
-        testset = testset_SVHN()
-    train(model, trainloader, testloader, criterion, optimizer, testset, device,epoch)
+    trainloader = trainloader(args.dataset)
+    testloader = testloader(args.dataset)
+    testset = testset(args.dataset)
+    train(model, trainloader, testloader, criterion, optimizer, testset, device, epoch)
     test(model, testloader, testset, device)
