@@ -16,7 +16,7 @@ you can
   
 python main.py --model DEKM --dataset MNIST --lr 0.01 --momentum 0.9 --weight_decay 5e-4 --epoch 20  
   
-you can choose MNIST/USPS/SVHN as your dataset  
+you can choose MNIST/USPS/SVHN/CIFAR10/FashionMNIST as your dataset  
 you can choose DEKM/IDEC/DCN as your model  
   
 after you press your ENTER  
