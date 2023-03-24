@@ -248,7 +248,7 @@ class IDEC_1(nn.Module):
         super(IDEC_1, self).__init__()
         self.num_clusters = 10
         self.alpha = 1.0
-        self.dcn1 = DCN_1()  # 使用DEKM_1模型作为编码器
+        self.dcn1 = DCN_1()
         self.modelsource = modelsource()
         self.encoder = nn.Sequential(
             nn.Linear(128 * 4 * 4, 500),
@@ -267,6 +267,8 @@ class IDEC_1(nn.Module):
         )
         self.centers = nn.Parameter(torch.Tensor(10, 10))
         self.loss_fn = nn.MSELoss()  # 使用均方误差作为自编码器的损失函数
+        self.recon_loss = torch.cuda.FloatTensor()
+        self.probs = torch.cuda.FloatTensor()
 
     def forward(self, x):
         x = self.modelsource.bn1(self.modelsource.conv1(x))
@@ -288,14 +290,25 @@ class IDEC_1(nn.Module):
         # 计算自编码器的重构误差
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
-        recon_loss = self.loss_fn(decoded, x)
+        self.recon_loss = self.loss_fn(decoded, x)
         # 计算聚类误差和总误差
         distances = torch.sum((encoded.unsqueeze(1) - self.centers.unsqueeze(0)) ** 2, dim=2)
-        probs = nn.functional.softmax(-distances, dim=1)
-        cluster_loss = torch.mean(torch.sum(probs * torch.log(probs), dim=1))
-        total_loss = recon_loss + self.alpha * cluster_loss
+        self.probs = nn.functional.softmax(-distances, dim=1)
         # 返回聚类结果和总误差
-        return encoded, probs, total_loss
+        return encoded
+
+    def get_probs(self):
+        return self.probs
+
+    def get_recon_loss(self):
+        return self.recon_loss
+
+    def get_loss(self, inputs, targets):
+        torch.cuda.empty_cache()
+        outputs = self(inputs)
+        torch.cuda.empty_cache()
+        loss = nn.CrossEntropyLoss()(outputs, targets)
+        return loss
 
     def init_centers(self, trainloader):
         # 用 KMeans 算法初始化聚类中心
@@ -317,8 +330,8 @@ class IDEC_3(nn.Module):
     def __init__(self):
         super(IDEC_3, self).__init__()
         self.num_clusters = 10
-        self.alpha = 0.5
-        self.dcn3 = DCN_3()  # 使用DEKM_1模型作为编码器
+        self.alpha = 1.0
+        self.dcn3 = DCN_3()
         self.modelsource = modelsource()
         self.encoder = nn.Sequential(
             nn.Linear(128 * 4 * 4, 500),
@@ -337,6 +350,8 @@ class IDEC_3(nn.Module):
         )
         self.centers = nn.Parameter(torch.Tensor(10, 10))
         self.loss_fn = nn.MSELoss()  # 使用均方误差作为自编码器的损失函数
+        self.recon_loss = torch.cuda.FloatTensor()
+        self.probs = torch.cuda.FloatTensor()
 
     def forward(self, x):
         x = self.modelsource.bn1(self.modelsource.conv0(x))
@@ -355,17 +370,27 @@ class IDEC_3(nn.Module):
         x = self.modelsource.relu(x)
         x = self.modelsource.pool(x)
         x = x.view(-1, 128 * 4 * 4)
-        # 计算自编码器的重构误差
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
-        recon_loss = self.loss_fn(decoded, x)
+        self.recon_loss = self.loss_fn(decoded, x)
         # 计算聚类误差和总误差
         distances = torch.sum((encoded.unsqueeze(1) - self.centers.unsqueeze(0)) ** 2, dim=2)
-        probs = nn.functional.softmax(-distances, dim=1)
-        cluster_loss = torch.mean(torch.sum(probs * torch.log(probs), dim=1))
-        total_loss = recon_loss + self.alpha * cluster_loss
+        self.probs = nn.functional.softmax(-distances, dim=1)
         # 返回聚类结果和总误差
-        return encoded, probs, total_loss
+        return encoded
+
+    def get_probs(self):
+        return self.probs
+
+    def get_recon_loss(self):
+        return self.recon_loss
+
+    def get_loss(self, inputs, targets):
+        torch.cuda.empty_cache()
+        outputs = self(inputs)
+        torch.cuda.empty_cache()
+        loss = nn.CrossEntropyLoss()(outputs, targets)
+        return loss
 
     def init_centers(self, trainloader):
         # 用 KMeans 算法初始化聚类中心
@@ -393,26 +418,23 @@ def test(model, testloader, testset, device):
         for data in testloader:
             images, labels = data
             images, labels = images.to(device), labels.to(device)
-            outputs, probs, loss = model(images)
+            outputs = model(images)
             _, predicted = torch.max(outputs.data, 1)
             correct += (predicted == labels).sum().item()
             labels_true.extend(labels.cpu().numpy())
             labels_pred.extend(predicted.cpu().numpy())
-
     accuracy = correct / len(testset)
     print('Accuracy of the network on the test images: %.2f %%' % (100 * accuracy))
-
     # 计算ARI和NMI
     ari = adjusted_rand_score(labels_true, labels_pred)
     nmi = normalized_mutual_info_score(labels_true, labels_pred)
-
     print('ARI: %.4f' % ari)
     print('NMI: %.4f' % nmi)
 
 
 # 训练模型
-def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, e):
-    for epoch in range(e):
+def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch):
+    for epoch_i in range(epoch):
         running_loss = 0.0
         correct = 0
         total = 0
@@ -430,9 +452,9 @@ def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, devi
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
             print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (
-                epoch + 1, i + 1, running_loss / 100, 100 * correct / total))
+                epoch_i + 1, i + 1, running_loss / 100, 100 * correct / total))
             running_loss = 0.0
-        print("[Epoch %d] Evaluating model..." % (epoch + 1))
+        print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
         test(model, testloader, testset, device)
 
 
@@ -463,21 +485,21 @@ def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
 
 def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch):
     model.init_centers(trainloader)
-    model.train()
     for epoch_i in range(epoch):
         running_loss = 0.0
         correct = 0
         total = 0
-        for i, (data, target) in enumerate(trainloader):
-            data = data.to(device)
-            target = target.to(device)
-            # 正向传播计算聚类结果和总误差
-            encoded, probs, loss = model(data)
-            # 反向传播更新模型参数
+        model.train()
+        for batch_idx, (inputs, targets) in enumerate(trainloader):
+            inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
+            encoded = model(inputs)
+            probs = model.get_probs()
+            recon_loss = model.get_recon_loss()
+            loss = recon_loss + 1 * model.get_loss(inputs, targets)
             loss.backward()
             optimizer.step()
-            # 逐步优化聚类中心
+            running_loss += loss.item()
             new_centers = torch.zeros_like(model.centers)
             for j in range(model.num_clusters):
                 mask = probs[:, j].unsqueeze(1)
@@ -488,12 +510,11 @@ def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
                     new_centers[j] = model.centers[j]
             model.centers.data = new_centers.data
             # 统计训练误差和损失
-            running_loss += loss.item()
             _, predicted = torch.max(encoded.data, 1)
-            total += target.size(0)
-            correct += (predicted == target).sum().item()
+            total += targets.size(0)
+            correct += (predicted == targets).sum().item()
             print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (
-                epoch_i + 1, i + 1, running_loss / (i + 1), 100 * correct / total))
+                epoch_i + 1, batch_idx + 1, running_loss / (batch_idx + 1), 100 * correct / total))
         # Evaluate the model after every epoch
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
         test(model, testloader, testset, device)
@@ -501,9 +522,9 @@ def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', default="IDEC", choices=["DEKM", "IDEC", "DCN"])
+    parser.add_argument('--model', default="DCN", choices=["DEKM", "IDEC", "DCN"])
     parser.add_argument('--dataset', default="SVHN", choices=["MNIST", "USPS", "SVHN"])
-    parser.add_argument('--lr', default=0.001, type=int)
+    parser.add_argument('--lr', default=0.01, type=int)
     parser.add_argument('--momentum', default=0.9, type=int)
     parser.add_argument('--weight_decay', default=5e-4, type=int)
     parser.add_argument('--epoch', default=20, type=int)
