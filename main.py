@@ -10,38 +10,32 @@ import numpy as np
 
 # 数据预处理
 def testset(dataset):
+    transform_test = transforms.Compose([
+        transforms.Resize((32, 32)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5])
+    ])
     if dataset == "USPS":
-        transform_test = transforms.Compose([
-            transforms.Resize((32, 32)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5], std=[0.5])
-        ])
         return datasets.USPS(root='./data', train=False, download=True, transform=transform_test)
     if dataset == "MNIST":
-        transform_test = transforms.Compose([
-            transforms.Resize((32, 32)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5], std=[0.5])
-        ])
         return datasets.MNIST(root='./data', train=False, download=True, transform=transform_test)
     if dataset == "SVHN":
-        transform_test = transforms.Compose([
-            transforms.Resize((32, 32)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5], std=[0.5])
-        ])
         return datasets.SVHN(root='./data', split='test', download=True, transform=transform_test)
+    if dataset == "CIFAR10":
+        return datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
+    if dataset == "FashionMNIST":
+        return datasets.FashionMNIST(root='./data', train=False, download=True, transform=transform_test)
 
 
 def trainset(dataset):
+    transform_train = transforms.Compose([
+        transforms.Resize((32, 32)),
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5])
+    ])
     if dataset == "USPS":
-        transform_train = transforms.Compose([
-            transforms.Resize((32, 32)),
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5], std=[0.5])
-        ])
         return datasets.USPS(root='./data', train=True, download=True, transform=transform_train)
     if dataset == "MNIST":
         transform_train = transforms.Compose([
@@ -53,14 +47,11 @@ def trainset(dataset):
         ])
         return datasets.MNIST(root='./data', train=True, download=True, transform=transform_train)
     if dataset == "SVHN":
-        transform_train = transforms.Compose([
-            transforms.Resize((32, 32)),
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5], std=[0.5])
-        ])
         return datasets.SVHN(root='./data', split='train', download=True, transform=transform_train)
+    if dataset == "CIFAR10":
+        return datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
+    if dataset == "FashionMNIST":
+        return datasets.FashionMNIST(root='./data', train=True, download=True, transform=transform_train)
 
 
 # 加载数据集
@@ -71,7 +62,10 @@ def testloader(dataset):
         return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
     if dataset == "SVHN":
         return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
-
+    if dataset == "CIFAR10":
+        return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
+    if dataset == "FashionMNIST":
+        return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
 
 def trainloader(dataset):
     if dataset == "USPS":
@@ -80,6 +74,10 @@ def trainloader(dataset):
         return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=True, num_workers=2)
     if dataset == "SVHN":
         return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=False, num_workers=2)
+    if dataset == "CIFAR10":
+        return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=True, num_workers=2)
+    if dataset == "FashionMNIST":
+        return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=True, num_workers=2)
 
 
 class modelsource(nn.Module):
@@ -108,7 +106,36 @@ class modelsource(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        x = x
+        x = self.relu(x)
+        x = self.bn2(self.conv2(x))
+        x = self.relu(x)
+        x = self.pool(x)
+        x = self.bn3(self.conv3(x))
+        x = self.bn4(self.conv4(x))
+        x = self.relu(x)
+        x = self.pool(x)
+        x = self.bn5(self.conv5(x))
+        x = self.relu(x)
+        x = self.bn6(self.conv6(x))
+        x = self.relu(x)
+        x = self.pool(x)
+        x = x.view(-1, 128 * 4 * 4)
+        return x
+
+    def forward2(self,x):
+        x = self.bn7(self.fc1(x))
+        x = self.relu(x)
+        x = self.dropout(x)
+        x = self.bn8(self.fc2(x))
+        x = self.relu(x)
+        x = self.dropout(x)
+        x = self.fc3(x)
+        return x
+
+    def get_loss(self, inputs, targets):
+        outputs = self(inputs)
+        loss = nn.CrossEntropyLoss()(outputs, targets)
+        return loss
 
 
 # 定义1色阶DCN模型
@@ -119,28 +146,8 @@ class DCN_1(nn.Module):
 
     def forward(self, x):
         x = self.modelsource.bn1(self.modelsource.conv1(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn2(self.modelsource.conv2(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = self.modelsource.bn3(self.modelsource.conv3(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn4(self.modelsource.conv4(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = self.modelsource.bn5(self.modelsource.conv5(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn6(self.modelsource.conv6(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = x.view(-1, 128 * 4 * 4)
-        x = self.modelsource.bn7(self.modelsource.fc1(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.dropout(x)
-        x = self.modelsource.bn8(self.modelsource.fc2(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.dropout(x)
-        x = self.modelsource.fc3(x)
+        x = self.modelsource.forward(x)
+        x = self.modelsource.forward2(x)
         return x
 
 
@@ -152,28 +159,8 @@ class DCN_3(nn.Module):
 
     def forward(self, x):
         x = self.modelsource.bn1(self.modelsource.conv0(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn2(self.modelsource.conv2(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = self.modelsource.bn3(self.modelsource.conv3(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn4(self.modelsource.conv4(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = self.modelsource.bn5(self.modelsource.conv5(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn6(self.modelsource.conv6(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = x.view(-1, 128 * 4 * 4)
-        x = self.modelsource.bn7(self.modelsource.fc1(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.dropout(x)
-        x = self.modelsource.bn8(self.modelsource.fc2(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.dropout(x)
-        x = self.modelsource.fc3(x)
+        x = self.modelsource.forward(x)
+        x = self.modelsource.forward2(x)
         return x
 
 
@@ -181,6 +168,7 @@ class DCN_3(nn.Module):
 class DEKM_3(nn.Module):
     def __init__(self):
         super(DEKM_3, self).__init__()
+        self.modelsource = modelsource()
         self.num_clusters = 10
         self.dcn3 = DCN_3()
         self.centers = nn.Parameter(torch.Tensor(self.num_clusters, 10))
@@ -243,6 +231,7 @@ class DEKM_1(nn.Module):
             self.centers.data.copy_(torch.from_numpy(kmeans.cluster_centers_).to(device))
 
 
+# 定义1色阶IDEC模型
 class IDEC_1(nn.Module):
     def __init__(self):
         super(IDEC_1, self).__init__()
@@ -255,38 +244,24 @@ class IDEC_1(nn.Module):
             nn.ReLU(),
             nn.Linear(500, 500),
             nn.ReLU(),
-            nn.Linear(500, 10)
+            nn.Linear(500, self.num_clusters)
         )
         self.decoder = nn.Sequential(
-            nn.Linear(10, 500),
+            nn.Linear(self.num_clusters, 500),
             nn.ReLU(),
             nn.Linear(500, 500),
             nn.ReLU(),
             nn.Linear(500, 128 * 4 * 4),
             nn.Tanh()
         )
-        self.centers = nn.Parameter(torch.Tensor(10, 10))
+        self.centers = nn.Parameter(torch.Tensor(self.num_clusters, 10))
         self.loss_fn = nn.MSELoss()  # 使用均方误差作为自编码器的损失函数
         self.recon_loss = torch.cuda.FloatTensor()
         self.probs = torch.cuda.FloatTensor()
 
     def forward(self, x):
         x = self.modelsource.bn1(self.modelsource.conv1(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn2(self.modelsource.conv2(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = self.modelsource.bn3(self.modelsource.conv3(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn4(self.modelsource.conv4(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = self.modelsource.bn5(self.modelsource.conv5(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn6(self.modelsource.conv6(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = x.view(-1, 128 * 4 * 4)
+        x = self.modelsource.forward(x)
         # 计算自编码器的重构误差
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
@@ -326,6 +301,7 @@ class IDEC_1(nn.Module):
             self.centers.data.copy_(torch.from_numpy(kmeans.cluster_centers_).to(device))
 
 
+# 定义3色阶IDEC模型
 class IDEC_3(nn.Module):
     def __init__(self):
         super(IDEC_3, self).__init__()
@@ -338,38 +314,24 @@ class IDEC_3(nn.Module):
             nn.ReLU(),
             nn.Linear(500, 500),
             nn.ReLU(),
-            nn.Linear(500, 10)
+            nn.Linear(500, self.num_clusters)
         )
         self.decoder = nn.Sequential(
-            nn.Linear(10, 500),
+            nn.Linear(self.num_clusters, 500),
             nn.ReLU(),
             nn.Linear(500, 500),
             nn.ReLU(),
             nn.Linear(500, 128 * 4 * 4),
             nn.Tanh()
         )
-        self.centers = nn.Parameter(torch.Tensor(10, 10))
+        self.centers = nn.Parameter(torch.Tensor(self.num_clusters, 10))
         self.loss_fn = nn.MSELoss()  # 使用均方误差作为自编码器的损失函数
         self.recon_loss = torch.cuda.FloatTensor()
         self.probs = torch.cuda.FloatTensor()
 
     def forward(self, x):
         x = self.modelsource.bn1(self.modelsource.conv0(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn2(self.modelsource.conv2(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = self.modelsource.bn3(self.modelsource.conv3(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn4(self.modelsource.conv4(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = self.modelsource.bn5(self.modelsource.conv5(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.bn6(self.modelsource.conv6(x))
-        x = self.modelsource.relu(x)
-        x = self.modelsource.pool(x)
-        x = x.view(-1, 128 * 4 * 4)
+        x = self.modelsource.forward(x)
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
         self.recon_loss = self.loss_fn(decoded, x)
@@ -483,12 +445,13 @@ def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
         test(model, testloader, testset, device)
 
 
-def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch):
+def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha):
     model.init_centers(trainloader)
     for epoch_i in range(epoch):
         running_loss = 0.0
         correct = 0
         total = 0
+        alpha = alpha
         model.train()
         for batch_idx, (inputs, targets) in enumerate(trainloader):
             inputs, targets = inputs.to(device), targets.to(device)
@@ -496,7 +459,7 @@ def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
             encoded = model(inputs)
             probs = model.get_probs()
             recon_loss = model.get_recon_loss()
-            loss = recon_loss + 1 * model.get_loss(inputs, targets)
+            loss = recon_loss + alpha * model.get_loss(inputs, targets)
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
@@ -522,21 +485,23 @@ def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', default="DCN", choices=["DEKM", "IDEC", "DCN"])
-    parser.add_argument('--dataset', default="SVHN", choices=["MNIST", "USPS", "SVHN"])
+    parser.add_argument('--model', default="DEKM", choices=["DEKM", "IDEC", "DCN"])
+    parser.add_argument('--dataset', default="FashionMNIST", choices=["MNIST", "USPS", "SVHN", "CIFAR10","FashionMNIST"])
     parser.add_argument('--lr', default=0.01, type=int)
     parser.add_argument('--momentum', default=0.9, type=int)
     parser.add_argument('--weight_decay', default=5e-4, type=int)
     parser.add_argument('--epoch', default=20, type=int)
+    parser.add_argument('--alpha', default=1.0, type=int)
     args = parser.parse_args()
     print(args)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
     lr = args.lr
+    alpha = args.alpha
     momentum = args.momentum
     weight_decay = args.weight_decay
     epoch = args.epoch
-    if args.dataset == "USPS" or args.dataset == "MNIST":
+    if args.dataset == "USPS" or args.dataset == "MNIST" or args.dataset == "FashionMNIST":
         if args.model == "DEKM":
             model = DEKM_1().to(device)
         elif args.model == "DCN":
@@ -545,7 +510,7 @@ if __name__ == '__main__':
             model = IDEC_1().to(device)
         else:
             print("invalid model name")
-    elif args.dataset == "SVHN":
+    elif args.dataset == "SVHN" or args.dataset == "CIFAR10":
         if args.model == "DEKM":
             model = DEKM_3().to(device)
         elif args.model == "DCN":
@@ -567,5 +532,5 @@ if __name__ == '__main__':
     elif args.model == "DCN":
         DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch)
     elif args.model == "IDEC":
-        IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
+        IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha)
     test(model, testloader, testset, device)
