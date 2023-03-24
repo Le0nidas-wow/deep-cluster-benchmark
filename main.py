@@ -4,6 +4,8 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from sklearn.metrics.cluster import adjusted_rand_score, normalized_mutual_info_score
 import argparse
+from sklearn.cluster import KMeans
+import numpy as np
 
 
 # 数据预处理
@@ -80,10 +82,10 @@ def trainloader(dataset):
         return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=False, num_workers=2)
 
 
-# 定义1色阶DCN模型
-class DCN_1(nn.Module):
+class modelsource(nn.Module):
     def __init__(self):
-        super(DCN_1, self).__init__()
+        super(modelsource, self).__init__()
+        self.conv0 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
@@ -106,29 +108,39 @@ class DCN_1(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        x = self.bn1(self.conv1(x))
-        x = self.relu(x)
-        x = self.bn2(self.conv2(x))
-        x = self.relu(x)
-        x = self.pool(x)
-        x = self.bn3(self.conv3(x))
-        x = self.relu(x)
-        x = self.bn4(self.conv4(x))
-        x = self.relu(x)
-        x = self.pool(x)
-        x = self.bn5(self.conv5(x))
-        x = self.relu(x)
-        x = self.bn6(self.conv6(x))
-        x = self.relu(x)
-        x = self.pool(x)
+        x = x
+
+
+# 定义1色阶DCN模型
+class DCN_1(nn.Module):
+    def __init__(self):
+        super(DCN_1, self).__init__()
+        self.modelsource = modelsource()
+
+    def forward(self, x):
+        x = self.modelsource.bn1(self.modelsource.conv1(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn2(self.modelsource.conv2(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
+        x = self.modelsource.bn3(self.modelsource.conv3(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn4(self.modelsource.conv4(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
+        x = self.modelsource.bn5(self.modelsource.conv5(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn6(self.modelsource.conv6(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
         x = x.view(-1, 128 * 4 * 4)
-        x = self.bn7(self.fc1(x))
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.bn8(self.fc2(x))
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.fc3(x)
+        x = self.modelsource.bn7(self.modelsource.fc1(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.dropout(x)
+        x = self.modelsource.bn8(self.modelsource.fc2(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.dropout(x)
+        x = self.modelsource.fc3(x)
         return x
 
 
@@ -136,51 +148,32 @@ class DCN_1(nn.Module):
 class DCN_3(nn.Module):
     def __init__(self):
         super(DCN_3, self).__init__()
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.bn3 = nn.BatchNorm2d(64)
-        self.conv4 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-        self.bn4 = nn.BatchNorm2d(64)
-        self.conv5 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.bn5 = nn.BatchNorm2d(128)
-        self.conv6 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
-        self.bn6 = nn.BatchNorm2d(128)
-        self.fc1 = nn.Linear(128 * 4 * 4, 1024)
-        self.bn7 = nn.BatchNorm1d(1024)
-        self.fc2 = nn.Linear(1024, 256)
-        self.bn8 = nn.BatchNorm1d(256)
-        self.fc3 = nn.Linear(256, 10)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.dropout = nn.Dropout(0.5)
-        self.relu = nn.ReLU()
+        self.modelsource = modelsource()
 
     def forward(self, x):
-        x = self.bn1(self.conv1(x))
-        x = self.relu(x)
-        x = self.bn2(self.conv2(x))
-        x = self.relu(x)
-        x = self.pool(x)
-        x = self.bn3(self.conv3(x))
-        x = self.relu(x)
-        x = self.bn4(self.conv4(x))
-        x = self.relu(x)
-        x = self.pool(x)
-        x = self.bn5(self.conv5(x))
-        x = self.relu(x)
-        x = self.bn6(self.conv6(x))
-        x = self.relu(x)
-        x = self.pool(x)
+        x = self.modelsource.bn1(self.modelsource.conv0(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn2(self.modelsource.conv2(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
+        x = self.modelsource.bn3(self.modelsource.conv3(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn4(self.modelsource.conv4(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
+        x = self.modelsource.bn5(self.modelsource.conv5(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn6(self.modelsource.conv6(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
         x = x.view(-1, 128 * 4 * 4)
-        x = self.bn7(self.fc1(x))
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.bn8(self.fc2(x))
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.fc3(x)
+        x = self.modelsource.bn7(self.modelsource.fc1(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.dropout(x)
+        x = self.modelsource.bn8(self.modelsource.fc2(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.dropout(x)
+        x = self.modelsource.fc3(x)
         return x
 
 
@@ -188,114 +181,206 @@ class DCN_3(nn.Module):
 class DEKM_3(nn.Module):
     def __init__(self):
         super(DEKM_3, self).__init__()
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.bn3 = nn.BatchNorm2d(64)
-        self.conv4 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-        self.bn4 = nn.BatchNorm2d(64)
-        self.conv5 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.bn5 = nn.BatchNorm2d(128)
-        self.conv6 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
-        self.bn6 = nn.BatchNorm2d(128)
-        self.fc1 = nn.Linear(128 * 4 * 4, 1024)
-        self.bn7 = nn.BatchNorm1d(1024)
-        self.fc2 = nn.Linear(1024, 256)
-        self.bn8 = nn.BatchNorm1d(256)
-        self.fc3 = nn.Linear(256, 10)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.dropout = nn.Dropout(0.5)
-        self.relu = nn.ReLU()
+        self.num_clusters = 10
+        self.dcn3 = DCN_3()
+        self.centers = nn.Parameter(torch.Tensor(self.num_clusters, 10))
 
     def forward(self, x):
-        x = self.bn1(self.conv1(x))
-        x = self.relu(x)
-        x = self.bn2(self.conv2(x))
-        x = self.relu(x)
-        x = self.pool(x)
-        x = self.bn3(self.conv3(x))
-        x = self.relu(x)
-        x = self.bn4(self.conv4(x))
-        x = self.relu(x)
-        x = self.pool(x)
-        x = self.bn5(self.conv5(x))
-        x = self.relu(x)
-        x = self.bn6(self.conv6(x))
-        x = self.relu(x)
-        x = self.pool(x)
-        x = x.view(-1, 128 * 4 * 4)
-        x = self.bn7(self.fc1(x))
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.bn8(self.fc2(x))
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.fc3(x)
+        x = self.dcn3.forward(x)
         return x
 
     def get_loss(self, inputs, targets):
         outputs = self(inputs)
         loss = nn.CrossEntropyLoss()(outputs, targets)
         return loss
+
+    def init_centers(self, trainloader):
+        # 用 KMeans 算法初始化聚类中心
+        kmeans = KMeans(n_clusters=self.num_clusters)
+        with torch.no_grad():
+            # 获取训练集上的所有特征向量
+            features = []
+            for data, _ in trainloader:
+                data = data.to(device)
+                features.append(self.dcn3(data).reshape(data.shape[0], -1).cpu().numpy())
+            features = np.concatenate(features, axis=0)
+            # 进行聚类
+            kmeans.fit(features)
+            # 将聚类中心设置为模型的参数
+            self.centers.data.copy_(torch.from_numpy(kmeans.cluster_centers_).to(device))
 
 
 # 定义1色阶DEKM模型
 class DEKM_1(nn.Module):
     def __init__(self):
         super(DEKM_1, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.bn3 = nn.BatchNorm2d(64)
-        self.conv4 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-        self.bn4 = nn.BatchNorm2d(64)
-        self.conv5 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.bn5 = nn.BatchNorm2d(128)
-        self.conv6 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
-        self.bn6 = nn.BatchNorm2d(128)
-        self.fc1 = nn.Linear(128 * 4 * 4, 1024)
-        self.bn7 = nn.BatchNorm1d(1024)
-        self.fc2 = nn.Linear(1024, 256)
-        self.bn8 = nn.BatchNorm1d(256)
-        self.fc3 = nn.Linear(256, 10)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.dropout = nn.Dropout(0.5)
-        self.relu = nn.ReLU()
+        self.num_clusters = 10
+        self.dcn1 = DCN_1()
+        self.centers = nn.Parameter(torch.Tensor(self.num_clusters, 10))
 
     def forward(self, x):
-        x = self.bn1(self.conv1(x))
-        x = self.relu(x)
-        x = self.bn2(self.conv2(x))
-        x = self.relu(x)
-        x = self.pool(x)
-        x = self.bn3(self.conv3(x))
-        x = self.relu(x)
-        x = self.bn4(self.conv4(x))
-        x = self.relu(x)
-        x = self.pool(x)
-        x = self.bn5(self.conv5(x))
-        x = self.relu(x)
-        x = self.bn6(self.conv6(x))
-        x = self.relu(x)
-        x = self.pool(x)
-        x = x.view(-1, 128 * 4 * 4)
-        x = self.bn7(self.fc1(x))
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.bn8(self.fc2(x))
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.fc3(x)
+        x = self.dcn1.forward(x)
         return x
 
     def get_loss(self, inputs, targets):
         outputs = self(inputs)
         loss = nn.CrossEntropyLoss()(outputs, targets)
         return loss
+
+    def init_centers(self, trainloader):
+        # 用 KMeans 算法初始化聚类中心
+        kmeans = KMeans(n_clusters=self.num_clusters)
+        with torch.no_grad():
+            # 获取训练集上的所有特征向量
+            features = []
+            for data, _ in trainloader:
+                data = data.to(device)
+                features.append(self.dcn1(data).reshape(data.shape[0], -1).cpu().numpy())
+            features = np.concatenate(features, axis=0)
+            # 进行聚类
+            kmeans.fit(features)
+            # 将聚类中心设置为模型的参数
+            self.centers.data.copy_(torch.from_numpy(kmeans.cluster_centers_).to(device))
+
+
+class IDEC_1(nn.Module):
+    def __init__(self):
+        super(IDEC_1, self).__init__()
+        self.num_clusters = 10
+        self.alpha = 1.0
+        self.dcn1 = DCN_1()  # 使用DEKM_1模型作为编码器
+        self.modelsource = modelsource()
+        self.encoder = nn.Sequential(
+            nn.Linear(128 * 4 * 4, 500),
+            nn.ReLU(),
+            nn.Linear(500, 500),
+            nn.ReLU(),
+            nn.Linear(500, 10)
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(10, 500),
+            nn.ReLU(),
+            nn.Linear(500, 500),
+            nn.ReLU(),
+            nn.Linear(500, 128 * 4 * 4),
+            nn.Tanh()
+        )
+        self.centers = nn.Parameter(torch.Tensor(10, 10))
+        self.loss_fn = nn.MSELoss()  # 使用均方误差作为自编码器的损失函数
+
+    def forward(self, x):
+        x = self.modelsource.bn1(self.modelsource.conv1(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn2(self.modelsource.conv2(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
+        x = self.modelsource.bn3(self.modelsource.conv3(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn4(self.modelsource.conv4(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
+        x = self.modelsource.bn5(self.modelsource.conv5(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn6(self.modelsource.conv6(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
+        x = x.view(-1, 128 * 4 * 4)
+        # 计算自编码器的重构误差
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        recon_loss = self.loss_fn(decoded, x)
+        # 计算聚类误差和总误差
+        distances = torch.sum((encoded.unsqueeze(1) - self.centers.unsqueeze(0)) ** 2, dim=2)
+        probs = nn.functional.softmax(-distances, dim=1)
+        cluster_loss = torch.mean(torch.sum(probs * torch.log(probs), dim=1))
+        total_loss = recon_loss + self.alpha * cluster_loss
+        # 返回聚类结果和总误差
+        return encoded, probs, total_loss
+
+    def init_centers(self, trainloader):
+        # 用 KMeans 算法初始化聚类中心
+        kmeans = KMeans(n_clusters=self.num_clusters)
+        with torch.no_grad():
+            # 获取训练集上的所有特征向量
+            features = []
+            for data, _ in trainloader:
+                data = data.to(device)
+                features.append(self.dcn1(data).reshape(data.shape[0], -1).cpu().numpy())
+            features = np.concatenate(features, axis=0)
+            # 进行聚类
+            kmeans.fit(features)
+            # 将聚类中心设置为模型的参数
+            self.centers.data.copy_(torch.from_numpy(kmeans.cluster_centers_).to(device))
+
+
+class IDEC_3(nn.Module):
+    def __init__(self):
+        super(IDEC_3, self).__init__()
+        self.num_clusters = 10
+        self.alpha = 0.5
+        self.dcn3 = DCN_3()  # 使用DEKM_1模型作为编码器
+        self.modelsource = modelsource()
+        self.encoder = nn.Sequential(
+            nn.Linear(128 * 4 * 4, 500),
+            nn.ReLU(),
+            nn.Linear(500, 500),
+            nn.ReLU(),
+            nn.Linear(500, 10)
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(10, 500),
+            nn.ReLU(),
+            nn.Linear(500, 500),
+            nn.ReLU(),
+            nn.Linear(500, 128 * 4 * 4),
+            nn.Tanh()
+        )
+        self.centers = nn.Parameter(torch.Tensor(10, 10))
+        self.loss_fn = nn.MSELoss()  # 使用均方误差作为自编码器的损失函数
+
+    def forward(self, x):
+        x = self.modelsource.bn1(self.modelsource.conv0(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn2(self.modelsource.conv2(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
+        x = self.modelsource.bn3(self.modelsource.conv3(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn4(self.modelsource.conv4(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
+        x = self.modelsource.bn5(self.modelsource.conv5(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.bn6(self.modelsource.conv6(x))
+        x = self.modelsource.relu(x)
+        x = self.modelsource.pool(x)
+        x = x.view(-1, 128 * 4 * 4)
+        # 计算自编码器的重构误差
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        recon_loss = self.loss_fn(decoded, x)
+        # 计算聚类误差和总误差
+        distances = torch.sum((encoded.unsqueeze(1) - self.centers.unsqueeze(0)) ** 2, dim=2)
+        probs = nn.functional.softmax(-distances, dim=1)
+        cluster_loss = torch.mean(torch.sum(probs * torch.log(probs), dim=1))
+        total_loss = recon_loss + self.alpha * cluster_loss
+        # 返回聚类结果和总误差
+        return encoded, probs, total_loss
+
+    def init_centers(self, trainloader):
+        # 用 KMeans 算法初始化聚类中心
+        kmeans = KMeans(n_clusters=self.num_clusters)
+        with torch.no_grad():
+            # 获取训练集上的所有特征向量
+            features = []
+            for data, _ in trainloader:
+                data = data.to(device)
+                features.append(self.dcn3(data).reshape(data.shape[0], -1).cpu().numpy())
+            features = np.concatenate(features, axis=0)
+            # 进行聚类
+            kmeans.fit(features)
+            # 将聚类中心设置为模型的参数
+            self.centers.data.copy_(torch.from_numpy(kmeans.cluster_centers_).to(device))
 
 
 # 测试模型
@@ -308,7 +393,7 @@ def test(model, testloader, testset, device):
         for data in testloader:
             images, labels = data
             images, labels = images.to(device), labels.to(device)
-            outputs = model(images)
+            outputs, probs, loss = model(images)
             _, predicted = torch.max(outputs.data, 1)
             correct += (predicted == labels).sum().item()
             labels_true.extend(labels.cpu().numpy())
@@ -352,6 +437,7 @@ def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, devi
 
 
 def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch):
+    model.init_centers(trainloader)
     for epoch_i in range(epoch):
         running_loss = 0.0
         correct = 0
@@ -375,10 +461,48 @@ def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
         test(model, testloader, testset, device)
 
 
+def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch):
+    model.init_centers(trainloader)
+    model.train()
+    for epoch_i in range(epoch):
+        running_loss = 0.0
+        correct = 0
+        total = 0
+        for i, (data, target) in enumerate(trainloader):
+            data = data.to(device)
+            target = target.to(device)
+            # 正向传播计算聚类结果和总误差
+            encoded, probs, loss = model(data)
+            # 反向传播更新模型参数
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            # 逐步优化聚类中心
+            new_centers = torch.zeros_like(model.centers)
+            for j in range(model.num_clusters):
+                mask = probs[:, j].unsqueeze(1)
+                sum_mask = torch.sum(mask)
+                if sum_mask > 0:
+                    new_centers[j] = torch.sum(mask * encoded.detach(), dim=0) / sum_mask
+                else:
+                    new_centers[j] = model.centers[j]
+            model.centers.data = new_centers.data
+            # 统计训练误差和损失
+            running_loss += loss.item()
+            _, predicted = torch.max(encoded.data, 1)
+            total += target.size(0)
+            correct += (predicted == target).sum().item()
+            print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (
+                epoch_i + 1, i + 1, running_loss / (i + 1), 100 * correct / total))
+        # Evaluate the model after every epoch
+        print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
+        test(model, testloader, testset, device)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', default="DEKM", choices=["DEKM", "IDEC", "DCN"])
-    parser.add_argument('--dataset', default="MNIST", choices=["MNIST", "USPS", "SVHN"])
+    parser.add_argument('--model', default="IDEC", choices=["DEKM", "IDEC", "DCN"])
+    parser.add_argument('--dataset', default="SVHN", choices=["MNIST", "USPS", "SVHN"])
     parser.add_argument('--lr', default=0.001, type=int)
     parser.add_argument('--momentum', default=0.9, type=int)
     parser.add_argument('--weight_decay', default=5e-4, type=int)
@@ -397,7 +521,7 @@ if __name__ == '__main__':
         elif args.model == "DCN":
             model = DCN_1().to(device)
         elif args.model == "IDEC":
-            print("not allow yet")
+            model = IDEC_1().to(device)
         else:
             print("invalid model name")
     elif args.dataset == "SVHN":
@@ -406,7 +530,7 @@ if __name__ == '__main__':
         elif args.model == "DCN":
             model = DCN_3().to(device)
         elif args.model == "IDEC":
-            print("not allow yet")
+            model = IDEC_3().to(device)
         else:
             print("invalid model name")
     else:
@@ -422,5 +546,5 @@ if __name__ == '__main__':
     elif args.model == "DCN":
         DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch)
     elif args.model == "IDEC":
-        exit()
+        IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
     test(model, testloader, testset, device)
