@@ -25,6 +25,8 @@ def testset(dataset):
         return datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
     if dataset == "FashionMNIST":
         return datasets.FashionMNIST(root='./data', train=False, download=True, transform=transform_test)
+    if dataset == "CIFAR100":
+        return datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
 
 
 def trainset(dataset):
@@ -52,6 +54,8 @@ def trainset(dataset):
         return datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
     if dataset == "FashionMNIST":
         return datasets.FashionMNIST(root='./data', train=True, download=True, transform=transform_train)
+    if dataset == "CIFAR100":
+        return datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
 
 
 # 加载数据集
@@ -66,6 +70,8 @@ def testloader(dataset):
         return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
     if dataset == "FashionMNIST":
         return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
+    if dataset == "CIFAR100":
+        return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
 
 def trainloader(dataset):
     if dataset == "USPS":
@@ -78,11 +84,14 @@ def trainloader(dataset):
         return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=True, num_workers=2)
     if dataset == "FashionMNIST":
         return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=True, num_workers=2)
+    if dataset == "CIFAR100":
+        return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=True, num_workers=2)
 
 
 class modelsource(nn.Module):
     def __init__(self):
         super(modelsource, self).__init__()
+        self.num_clusters = 10
         self.conv0 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(32)
@@ -100,7 +109,7 @@ class modelsource(nn.Module):
         self.bn7 = nn.BatchNorm1d(1024)
         self.fc2 = nn.Linear(1024, 256)
         self.bn8 = nn.BatchNorm1d(256)
-        self.fc3 = nn.Linear(256, 10)
+        self.fc3 = nn.Linear(256, num_clusters)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.dropout = nn.Dropout(0.5)
         self.relu = nn.ReLU()
@@ -137,12 +146,15 @@ class modelsource(nn.Module):
         loss = nn.CrossEntropyLoss()(outputs, targets)
         return loss
 
+    def get_num_clusters(self, num_clusters):
+        self.num_clusters = num_clusters
 
 # 定义1色阶DCN模型
 class DCN_1(nn.Module):
-    def __init__(self):
+    def __init__(self, num_clusters):
         super(DCN_1, self).__init__()
         self.modelsource = modelsource()
+        self.modelsource.get_num_clusters(num_clusters)
 
     def forward(self, x):
         x = self.modelsource.bn1(self.modelsource.conv1(x))
@@ -153,9 +165,10 @@ class DCN_1(nn.Module):
 
 # 定义3色阶DCN模型
 class DCN_3(nn.Module):
-    def __init__(self):
+    def __init__(self, num_clusters):
         super(DCN_3, self).__init__()
         self.modelsource = modelsource()
+        self.modelsource.get_num_clusters(num_clusters)
 
     def forward(self, x):
         x = self.modelsource.bn1(self.modelsource.conv0(x))
@@ -166,12 +179,11 @@ class DCN_3(nn.Module):
 
 # 定义3色阶DEKM模型
 class DEKM_3(nn.Module):
-    def __init__(self):
+    def __init__(self, num_clusters):
         super(DEKM_3, self).__init__()
-        self.modelsource = modelsource()
-        self.num_clusters = 10
-        self.dcn3 = DCN_3()
-        self.centers = nn.Parameter(torch.Tensor(self.num_clusters, 10))
+        self.num_clusters = num_clusters
+        self.dcn3 = DCN_3(num_clusters)
+        self.centers = nn.Parameter(torch.Tensor(self.num_clusters, self.num_clusters))
 
     def forward(self, x):
         x = self.dcn3.forward(x)
@@ -200,11 +212,11 @@ class DEKM_3(nn.Module):
 
 # 定义1色阶DEKM模型
 class DEKM_1(nn.Module):
-    def __init__(self):
+    def __init__(self, num_clusters):
         super(DEKM_1, self).__init__()
-        self.num_clusters = 10
-        self.dcn1 = DCN_1()
-        self.centers = nn.Parameter(torch.Tensor(self.num_clusters, 10))
+        self.dcn1 = DCN_1(num_clusters)
+        self.num_clusters = num_clusters
+        self.centers = nn.Parameter(torch.Tensor(self.num_clusters, self.num_clusters))
 
     def forward(self, x):
         x = self.dcn1.forward(x)
@@ -233,11 +245,11 @@ class DEKM_1(nn.Module):
 
 # 定义1色阶IDEC模型
 class IDEC_1(nn.Module):
-    def __init__(self):
+    def __init__(self, num_clusters):
         super(IDEC_1, self).__init__()
-        self.num_clusters = 10
+        self.num_clusters = num_clusters
         self.alpha = 1.0
-        self.dcn1 = DCN_1()
+        self.dekm1 = DEKM_1(num_clusters)
         self.modelsource = modelsource()
         self.encoder = nn.Sequential(
             nn.Linear(128 * 4 * 4, 500),
@@ -293,7 +305,7 @@ class IDEC_1(nn.Module):
             features = []
             for data, _ in trainloader:
                 data = data.to(device)
-                features.append(self.dcn1(data).reshape(data.shape[0], -1).cpu().numpy())
+                features.append(self.dekm1(data).reshape(data.shape[0], -1).cpu().numpy())
             features = np.concatenate(features, axis=0)
             # 进行聚类
             kmeans.fit(features)
@@ -303,11 +315,11 @@ class IDEC_1(nn.Module):
 
 # 定义3色阶IDEC模型
 class IDEC_3(nn.Module):
-    def __init__(self):
+    def __init__(self, num_clusters):
         super(IDEC_3, self).__init__()
-        self.num_clusters = 10
+        self.num_clusters = num_clusters
         self.alpha = 1.0
-        self.dcn3 = DCN_3()
+        self.dekm3 = DEKM_3(num_clusters)
         self.modelsource = modelsource()
         self.encoder = nn.Sequential(
             nn.Linear(128 * 4 * 4, 500),
@@ -362,7 +374,7 @@ class IDEC_3(nn.Module):
             features = []
             for data, _ in trainloader:
                 data = data.to(device)
-                features.append(self.dcn3(data).reshape(data.shape[0], -1).cpu().numpy())
+                features.append(self.dekm3(data).reshape(data.shape[0], -1).cpu().numpy())
             features = np.concatenate(features, axis=0)
             # 进行聚类
             kmeans.fit(features)
@@ -486,12 +498,13 @@ def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', default="DEKM", choices=["DEKM", "IDEC", "DCN"])
-    parser.add_argument('--dataset', default="FashionMNIST", choices=["MNIST", "USPS", "SVHN", "CIFAR10","FashionMNIST"])
+    parser.add_argument('--dataset', default="CIFAR100", choices=["MNIST", "USPS", "SVHN", "CIFAR10", "FashionMNIST", "CIFAR100"])
     parser.add_argument('--lr', default=0.01, type=int)
     parser.add_argument('--momentum', default=0.9, type=int)
     parser.add_argument('--weight_decay', default=5e-4, type=int)
-    parser.add_argument('--epoch', default=20, type=int)
+    parser.add_argument('--epoch', default=100, type=int)
     parser.add_argument('--alpha', default=1.0, type=int)
+    parser.add_argument('--num_clusters', default=100, type=int)
     args = parser.parse_args()
     print(args)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -501,22 +514,23 @@ if __name__ == '__main__':
     momentum = args.momentum
     weight_decay = args.weight_decay
     epoch = args.epoch
+    num_clusters = args.num_clusters
     if args.dataset == "USPS" or args.dataset == "MNIST" or args.dataset == "FashionMNIST":
         if args.model == "DEKM":
-            model = DEKM_1().to(device)
+            model = DEKM_1(num_clusters).to(device)
         elif args.model == "DCN":
-            model = DCN_1().to(device)
+            model = DCN_1(num_clusters).to(device)
         elif args.model == "IDEC":
-            model = IDEC_1().to(device)
+            model = IDEC_1(num_clusters).to(device)
         else:
             print("invalid model name")
-    elif args.dataset == "SVHN" or args.dataset == "CIFAR10":
+    elif args.dataset == "SVHN" or args.dataset == "CIFAR10" or args.dataset == "CIFAR100":
         if args.model == "DEKM":
-            model = DEKM_3().to(device)
+            model = DEKM_3(num_clusters).to(device)
         elif args.model == "DCN":
-            model = DCN_3().to(device)
+            model = DCN_3(num_clusters).to(device)
         elif args.model == "IDEC":
-            model = IDEC_3().to(device)
+            model = IDEC_3(num_clusters).to(device)
         else:
             print("invalid model name")
     else:
