@@ -5,6 +5,8 @@ from torchvision import datasets, transforms
 from sklearn.metrics.cluster import adjusted_rand_score, normalized_mutual_info_score
 import argparse
 from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
 import numpy as np
 
 
@@ -27,6 +29,8 @@ def testset(dataset):
         return datasets.FashionMNIST(root='./data', train=False, download=True, transform=transform_test)
     if dataset == "CIFAR100":
         return datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
+    if dataset == "ImageNet":
+        return datasets.ImageNet(root='./data', split='test', download=True, transform=transform_test)
 
 
 def trainset(dataset):
@@ -56,6 +60,8 @@ def trainset(dataset):
         return datasets.FashionMNIST(root='./data', train=True, download=True, transform=transform_train)
     if dataset == "CIFAR100":
         return datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
+    if dataset == "ImageNet":
+        return datasets.ImageNet(root='./data', split='train', download=True, transform=transform_train)
 
 
 # 加载数据集
@@ -72,6 +78,9 @@ def testloader(dataset):
         return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
     if dataset == "CIFAR100":
         return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
+    if dataset == "ImageNet":
+        return torch.utils.data.DataLoader(testset(dataset), batch_size=128, shuffle=False, num_workers=2)
+
 
 def trainloader(dataset):
     if dataset == "USPS":
@@ -85,6 +94,8 @@ def trainloader(dataset):
     if dataset == "FashionMNIST":
         return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=True, num_workers=2)
     if dataset == "CIFAR100":
+        return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=True, num_workers=2)
+    if dataset == "ImageNet":
         return torch.utils.data.DataLoader(trainset(dataset), batch_size=128, shuffle=True, num_workers=2)
 
 
@@ -131,7 +142,7 @@ class modelsource(nn.Module):
         x = x.view(-1, 128 * 4 * 4)
         return x
 
-    def forward2(self,x):
+    def forward2(self, x):
         x = self.bn7(self.fc1(x))
         x = self.relu(x)
         x = self.dropout(x)
@@ -148,6 +159,7 @@ class modelsource(nn.Module):
 
     def get_num_clusters(self, num_clusters):
         self.num_clusters = num_clusters
+
 
 # 定义1色阶DCN模型
 class DCN_1(nn.Module):
@@ -384,6 +396,7 @@ class IDEC_3(nn.Module):
 
 # 测试模型
 def test(model, testloader, testset, device):
+    visualize_clusters(model,testloader,device)
     model.eval()
     correct = 0
     labels_true = []
@@ -406,6 +419,44 @@ def test(model, testloader, testset, device):
     print('NMI: %.4f' % nmi)
 
 
+def visualize_clusters(model, testloader, device):
+    # get the latent representation of the test data
+    model.eval()
+    plt.figure(figsize=(15, 15))
+    with torch.no_grad():
+        for data in testloader:
+            images, labels = data
+            images = images.to(device)
+            latent_rep = model.forward(images).cpu().numpy()
+            pca = PCA(n_components=2)
+            pca.fit(latent_rep)
+            reduced_rep = pca.transform(latent_rep)
+            # plot the reduced representation and color-code points by their true label and predicted label
+            for i in range(10):
+                idx = np.where(labels == i)[0]
+                plt.scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'True Label {i}', alpha=0.5)
+            # reduce the dimensionality of the latent representation using PCA
+    plt.legend()
+    plt.show()
+    plt.figure(figsize=(15, 15))
+    with torch.no_grad():
+        for data in testloader:
+            images, labels = data
+            images = images.to(device)
+            latent_rep = model.forward(images).cpu().numpy()
+            pca = PCA(n_components=2)
+            pca.fit(latent_rep)
+            reduced_rep = pca.transform(latent_rep)
+            # plot the reduced representation and color-code points by their true label and predicted label
+            _, predicted = torch.max(model(images).data, 1)
+            for i in range(10):
+                idx = np.where(predicted.cpu().numpy() == i)[0]
+                plt.scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'Predicted Label {i}', alpha=0.5)
+                # reduce the dimensionality of the latent representation using PCA
+    plt.legend()
+    plt.show()
+
+
 # 训练模型
 def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch):
     for epoch_i in range(epoch):
@@ -413,7 +464,7 @@ def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, devi
         correct = 0
         total = 0
         model.train()  # 将模型设置为训练模式
-        for i, data in enumerate(trainloader, 0):
+        for batch_idx, data in enumerate(trainloader, 0):
             inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
@@ -426,8 +477,7 @@ def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, devi
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
             print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (
-                epoch_i + 1, i + 1, running_loss / 100, 100 * correct / total))
-            running_loss = 0.0
+                epoch_i + 1, batch_idx + 1, running_loss / (batch_idx +1), 100 * correct / total))
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
         test(model, testloader, testset, device)
 
@@ -498,13 +548,14 @@ def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', default="DEKM", choices=["DEKM", "IDEC", "DCN"])
-    parser.add_argument('--dataset', default="CIFAR100", choices=["MNIST", "USPS", "SVHN", "CIFAR10", "FashionMNIST", "CIFAR100"])
+    parser.add_argument('--dataset', default="MNIST",
+                        choices=["MNIST", "USPS", "SVHN", "CIFAR10", "FashionMNIST", "CIFAR100"])
     parser.add_argument('--lr', default=0.01, type=int)
     parser.add_argument('--momentum', default=0.9, type=int)
     parser.add_argument('--weight_decay', default=5e-4, type=int)
     parser.add_argument('--epoch', default=100, type=int)
     parser.add_argument('--alpha', default=1.0, type=int)
-    parser.add_argument('--num_clusters', default=100, type=int)
+    parser.add_argument('--num_clusters', default=10, type=int)
     args = parser.parse_args()
     print(args)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
