@@ -395,8 +395,7 @@ class IDEC_3(nn.Module):
 
 
 # 测试模型
-def test(model, testloader, testset, device):
-    visualize_clusters(model,testloader,device)
+def test(model, testloader, testset, device, epoch):
     model.eval()
     correct = 0
     labels_true = []
@@ -417,12 +416,13 @@ def test(model, testloader, testset, device):
     nmi = normalized_mutual_info_score(labels_true, labels_pred)
     print('ARI: %.4f' % ari)
     print('NMI: %.4f' % nmi)
+    visualize_clusters(model, testloader, device, epoch, accuracy, ari, nmi)
 
 
-def visualize_clusters(model, testloader, device):
+def visualize_clusters(model, testloader, device, epoch, acc, ari, nmi):
     # get the latent representation of the test data
     model.eval()
-    plt.figure(figsize=(15, 15))
+    fig, axs = plt.subplots(1, 3, figsize=(45, 15))
     with torch.no_grad():
         for data in testloader:
             images, labels = data
@@ -434,11 +434,11 @@ def visualize_clusters(model, testloader, device):
             # plot the reduced representation and color-code points by their true label and predicted label
             for i in range(10):
                 idx = np.where(labels == i)[0]
-                plt.scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'True Label {i}', alpha=0.5)
+                axs[0].scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'True Label {i}', alpha=0.5)
             # reduce the dimensionality of the latent representation using PCA
-    plt.legend()
-    plt.show()
-    plt.figure(figsize=(15, 15))
+    axs[0].legend([f'True Label {i} in epoch {epoch}' for i in range(10)])
+    axs[0].set_title(f'True Labels in Epoch {epoch}')
+
     with torch.no_grad():
         for data in testloader:
             images, labels = data
@@ -451,9 +451,34 @@ def visualize_clusters(model, testloader, device):
             _, predicted = torch.max(model(images).data, 1)
             for i in range(10):
                 idx = np.where(predicted.cpu().numpy() == i)[0]
-                plt.scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'Predicted Label {i}', alpha=0.5)
+                axs[1].scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'Predicted Label {i}', alpha=0.5)
                 # reduce the dimensionality of the latent representation using PCA
-    plt.legend()
+    axs[1].legend([f'Predicted Label {i} in epoch {epoch}' for i in range(10)])
+    axs[1].set_title(f'Predicted Labels in Epoch {epoch}')
+
+    with torch.no_grad():
+        for data in testloader:
+            images, labels = data
+            images = images.to(device)
+            latent_rep = model.forward(images).cpu().numpy()
+            pca = PCA(n_components=2)
+            pca.fit(latent_rep)
+            reduced_rep = pca.transform(latent_rep)
+            # get the predicted labels
+            _, predicted_labels = torch.max(model(images).data, 1)
+            predicted_labels = predicted_labels.cpu().numpy()
+            # get the indices of correct and incorrect predictions
+            correct_indices = np.where(predicted_labels == labels.cpu().numpy())[0]
+            incorrect_indices = np.where(predicted_labels != labels.cpu().numpy())[0]
+            # plot the reduced representation and color-code points by their true label and predicted label
+            axs[2].scatter(reduced_rep[correct_indices, 0], reduced_rep[correct_indices, 1], c='green', label='Correct',
+                           alpha=0.5)
+            axs[2].scatter(reduced_rep[incorrect_indices, 0], reduced_rep[incorrect_indices, 1], c='red',
+                           label='Incorrect', alpha=0.5)
+            # reduce the dimensionality of the latent representation using PCA
+    axs[2].legend(["Correct", "Incorrect"])
+    axs[2].set_title(f'The contrast of Epoch {epoch}')
+    plt.title(f'The result of Epoch {epoch},acc:{acc},ari:{ari},nmi:{nmi}')
     plt.show()
 
 
@@ -477,9 +502,9 @@ def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, devi
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
             print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (
-                epoch_i + 1, batch_idx + 1, running_loss / (batch_idx +1), 100 * correct / total))
+                epoch_i + 1, batch_idx + 1, running_loss / (batch_idx + 1), 100 * correct / total))
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
-        test(model, testloader, testset, device)
+        test(model, testloader, testset, device, epoch_i)
 
 
 def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch):
@@ -504,7 +529,7 @@ def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
                 epoch_i + 1, batch_idx + 1, running_loss / (batch_idx + 1), 100 * correct / total))
         # Evaluate the model after every epoch
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
-        test(model, testloader, testset, device)
+        test(model, testloader, testset, device, epoch_i)
 
 
 def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha):
@@ -542,7 +567,7 @@ def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch,
                 epoch_i + 1, batch_idx + 1, running_loss / (batch_idx + 1), 100 * correct / total))
         # Evaluate the model after every epoch
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
-        test(model, testloader, testset, device)
+        test(model, testloader, testset, device, epoch_i)
 
 
 if __name__ == '__main__':
@@ -598,4 +623,3 @@ if __name__ == '__main__':
         DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch)
     elif args.model == "IDEC":
         IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha)
-    test(model, testloader, testset, device)
