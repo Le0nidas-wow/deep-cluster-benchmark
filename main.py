@@ -10,6 +10,24 @@ from sklearn.decomposition import PCA
 import numpy as np
 
 
+class testlist:
+    def __init__(self):
+        super(testlist, self).__init__()
+        self.acclist = []
+        self.losslist = []
+        self.arilist = []
+        self.nmilist = []
+
+    def getlist(self):
+        return self.acclist, self.losslist, self.arilist, self.nmilist
+
+    def appendlist(self, acc, loss, ari, nmi):
+        self.acclist.append(acc)
+        self.losslist.append(loss)
+        self.arilist.append(ari)
+        self.nmilist.append(nmi)
+
+
 # 数据预处理
 def testset(dataset):
     transform_test = transforms.Compose([
@@ -395,7 +413,7 @@ class IDEC_3(nn.Module):
 
 
 # 测试模型
-def test(model, testloader, testset, device, epoch):
+def test(model, testloader, testset, device, epoch, loss, tl, num_clusters):
     model.eval()
     correct = 0
     labels_true = []
@@ -416,10 +434,12 @@ def test(model, testloader, testset, device, epoch):
     nmi = normalized_mutual_info_score(labels_true, labels_pred)
     print('ARI: %.4f' % ari)
     print('NMI: %.4f' % nmi)
-    visualize_clusters(model, testloader, device, epoch, accuracy, ari, nmi)
+    tl.appendlist(accuracy, loss, ari, nmi)
+    if (epoch % 10) == 9:
+        visualize_clusters(model, testloader, device, epoch, accuracy, ari, nmi, num_clusters)
 
 
-def visualize_clusters(model, testloader, device, epoch, acc, ari, nmi):
+def visualize_clusters(model, testloader, device, epoch, acc, ari, nmi, num_clusters):
     # get the latent representation of the test data
     model.eval()
     fig, axs = plt.subplots(1, 3, figsize=(45, 15))
@@ -432,11 +452,11 @@ def visualize_clusters(model, testloader, device, epoch, acc, ari, nmi):
             pca.fit(latent_rep)
             reduced_rep = pca.transform(latent_rep)
             # plot the reduced representation and color-code points by their true label and predicted label
-            for i in range(10):
+            for i in range(num_clusters):
                 idx = np.where(labels == i)[0]
                 axs[0].scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'True Label {i}', alpha=0.5)
             # reduce the dimensionality of the latent representation using PCA
-    axs[0].legend([f'True Label {i} in epoch {epoch}' for i in range(10)])
+    axs[0].legend([f'True Label {i} in epoch {epoch}' for i in range(num_clusters)])
     axs[0].set_title(f'True Labels in Epoch {epoch}')
 
     with torch.no_grad():
@@ -449,11 +469,11 @@ def visualize_clusters(model, testloader, device, epoch, acc, ari, nmi):
             reduced_rep = pca.transform(latent_rep)
             # plot the reduced representation and color-code points by their true label and predicted label
             _, predicted = torch.max(model(images).data, 1)
-            for i in range(10):
+            for i in range(num_clusters):
                 idx = np.where(predicted.cpu().numpy() == i)[0]
                 axs[1].scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'Predicted Label {i}', alpha=0.5)
                 # reduce the dimensionality of the latent representation using PCA
-    axs[1].legend([f'Predicted Label {i} in epoch {epoch}' for i in range(10)])
+    axs[1].legend([f'Predicted Label {i} in epoch {epoch}' for i in range(num_clusters)])
     axs[1].set_title(f'Predicted Labels in Epoch {epoch}')
 
     with torch.no_grad():
@@ -471,23 +491,38 @@ def visualize_clusters(model, testloader, device, epoch, acc, ari, nmi):
             correct_indices = np.where(predicted_labels == labels.cpu().numpy())[0]
             incorrect_indices = np.where(predicted_labels != labels.cpu().numpy())[0]
             # plot the reduced representation and color-code points by their true label and predicted label
-            axs[2].scatter(reduced_rep[correct_indices, 0], reduced_rep[correct_indices, 1], c='green', label='Correct',
-                           alpha=0.5)
-            axs[2].scatter(reduced_rep[incorrect_indices, 0], reduced_rep[incorrect_indices, 1], c='red',
-                           label='Incorrect', alpha=0.5)
+            axs[2].scatter(reduced_rep[correct_indices, 0], reduced_rep[correct_indices, 1], c='green', label='Correct',alpha=0.5)
+            axs[2].scatter(reduced_rep[incorrect_indices, 0], reduced_rep[incorrect_indices, 1], c='red',label='Incorrect', alpha=0.5)
             # reduce the dimensionality of the latent representation using PCA
     axs[2].legend(["Correct", "Incorrect"])
     axs[2].set_title(f'The contrast of Epoch {epoch}')
     plt.title(f'The result of Epoch {epoch},acc:{acc},ari:{ari},nmi:{nmi}')
+    plt.savefig(f'./epoch_{epoch}.png')
+    plt.show()
+
+
+def plot_graph(acc_list, loss_list, nmi_list, ari_list):
+    fig, ax = plt.subplots(2, 2, figsize=(15, 10))
+    ax[0][0].plot(loss_list)
+    ax[0][0].set_title('Training Loss')
+    ax[0][1].plot(acc_list)
+    ax[0][1].set_title('Training Accuracy')
+    ax[1][0].plot(nmi_list)
+    ax[1][0].set_title('NMI Score')
+    ax[1][1].plot(ari_list)
+    ax[1][1].set_title('ARI Score')
+    plt.savefig('./result.png')
     plt.show()
 
 
 # 训练模型
-def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch):
+def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch, num_clusters):
+    tl = testlist()
     for epoch_i in range(epoch):
         running_loss = 0.0
         correct = 0
         total = 0
+        final_loss = 0.0
         model.train()  # 将模型设置为训练模式
         for batch_idx, data in enumerate(trainloader, 0):
             inputs, labels = data
@@ -501,19 +536,23 @@ def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, devi
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
-            print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (
-                epoch_i + 1, batch_idx + 1, running_loss / (batch_idx + 1), 100 * correct / total))
+            final_loss = running_loss / (batch_idx + 1)
+            print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (epoch_i + 1, batch_idx + 1, final_loss, 100 * correct / total))
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
-        test(model, testloader, testset, device, epoch_i)
+        test(model, testloader, testset, device, epoch_i, final_loss, tl, num_clusters)
+    acclist, losslist, arilist, nmilist = tl.getlist()
+    plot_graph(acclist, losslist, nmilist, nmilist)
 
 
-def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch):
+def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch, num_clusters):
+    tl = testlist()
     model.init_centers(trainloader)
     for epoch_i in range(epoch):
         running_loss = 0.0
         correct = 0
         total = 0
         model.train()
+        final_loss = 0.0
         for batch_idx, (inputs, targets) in enumerate(trainloader):
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
@@ -525,14 +564,18 @@ def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
             _, predicted = torch.max(outputs.data, 1)
             total += targets.size(0)
             correct += (predicted == targets).sum().item()
+            final_loss = running_loss / (batch_idx + 1)
             print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (
-                epoch_i + 1, batch_idx + 1, running_loss / (batch_idx + 1), 100 * correct / total))
+                epoch_i + 1, batch_idx + 1, final_loss, 100 * correct / total))
         # Evaluate the model after every epoch
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
-        test(model, testloader, testset, device, epoch_i)
+        test(model, testloader, testset, device, epoch_i, final_loss, tl, num_clusters)
+    acclist, losslist, arilist, nmilist = tl.getlist()
+    plot_graph(acclist, losslist, nmilist, nmilist)
 
 
-def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha):
+def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha, num_clusters):
+    tl = testlist()
     model.init_centers(trainloader)
     for epoch_i in range(epoch):
         running_loss = 0.0
@@ -540,6 +583,7 @@ def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch,
         total = 0
         alpha = alpha
         model.train()
+        final_loss = 0.0
         for batch_idx, (inputs, targets) in enumerate(trainloader):
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
@@ -563,19 +607,21 @@ def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch,
             _, predicted = torch.max(encoded.data, 1)
             total += targets.size(0)
             correct += (predicted == targets).sum().item()
+            final_loss = running_loss / (batch_idx + 1)
             print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (
-                epoch_i + 1, batch_idx + 1, running_loss / (batch_idx + 1), 100 * correct / total))
+                epoch_i + 1, batch_idx + 1, final_loss, 100 * correct / total))
         # Evaluate the model after every epoch
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
-        test(model, testloader, testset, device, epoch_i)
+        test(model, testloader, testset, device, epoch_i, final_loss, tl, num_clusters)
+    acclist, losslist, arilist, nmilist = tl.getlist()
+    plot_graph(acclist, losslist, nmilist, nmilist)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', default="DEKM", choices=["DEKM", "IDEC", "DCN"])
-    parser.add_argument('--dataset', default="MNIST",
-                        choices=["MNIST", "USPS", "SVHN", "CIFAR10", "FashionMNIST", "CIFAR100"])
-    parser.add_argument('--lr', default=0.01, type=int)
+    parser.add_argument('--dataset', default="MNIST", choices=["MNIST", "USPS", "SVHN", "CIFAR10", "FashionMNIST", "CIFAR100"])
+    parser.add_argument('--lr', default=0.001, type=int)
     parser.add_argument('--momentum', default=0.9, type=int)
     parser.add_argument('--weight_decay', default=5e-4, type=int)
     parser.add_argument('--epoch', default=100, type=int)
@@ -591,6 +637,8 @@ if __name__ == '__main__':
     weight_decay = args.weight_decay
     epoch = args.epoch
     num_clusters = args.num_clusters
+    if args.dataset == "CIFAR100":
+        num_clusters = 100
     if args.dataset == "USPS" or args.dataset == "MNIST" or args.dataset == "FashionMNIST":
         if args.model == "DEKM":
             model = DEKM_1(num_clusters).to(device)
@@ -618,8 +666,8 @@ if __name__ == '__main__':
     testloader = testloader(args.dataset)
     testset = testset(args.dataset)
     if args.model == "DEKM":
-        DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch)
+        DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch, num_clusters)
     elif args.model == "DCN":
-        DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch)
+        DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch, num_clusters)
     elif args.model == "IDEC":
-        IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha)
+        IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha, num_clusters)
