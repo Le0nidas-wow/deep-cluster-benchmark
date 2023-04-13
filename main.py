@@ -7,6 +7,7 @@ import argparse
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 import numpy as np
 
 
@@ -435,70 +436,108 @@ def test(model, testloader, testset, device, epoch, loss, tl, num_clusters):
     print('ARI: %.4f' % ari)
     print('NMI: %.4f' % nmi)
     tl.appendlist(accuracy, loss, ari, nmi)
-    if (epoch % 10) == 9:
+    if (epoch % 1) == 0:
         visualize_clusters(model, testloader, device, epoch, accuracy, ari, nmi, num_clusters)
 
 
 def visualize_clusters(model, testloader, device, epoch, acc, ari, nmi, num_clusters):
     # get the latent representation of the test data
     model.eval()
-    fig, axs = plt.subplots(1, 3, figsize=(45, 15))
     with torch.no_grad():
-        for data in testloader:
-            images, labels = data
-            images = images.to(device)
-            latent_rep = model.forward(images).cpu().numpy()
-            pca = PCA(n_components=2)
-            pca.fit(latent_rep)
-            reduced_rep = pca.transform(latent_rep)
-            # plot the reduced representation and color-code points by their true label and predicted label
-            for i in range(num_clusters):
-                idx = np.where(labels == i)[0]
-                axs[0].scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'True Label {i}', alpha=0.5)
-            # reduce the dimensionality of the latent representation using PCA
-    axs[0].legend([f'True Label {i} in epoch {epoch}' for i in range(num_clusters)])
-    axs[0].set_title(f'True Labels in Epoch {epoch}')
+        data = []
+        labels = []
+        latent_rep = []
+        for batch in testloader:
+            batch_data, batch_labels = batch
+            data.append(batch_data.numpy().reshape(batch_data.shape[0], -1))
+            labels.append(batch_labels.numpy())
+            latent_rep.append(model.forward(batch_data.to(device)).cpu().numpy())
+        data = np.concatenate(data, axis=0)
+        labels = np.concatenate(labels, axis=0)
+        latent_rep = np.concatenate(latent_rep, axis=0)
+        tsne = TSNE(n_components=2, perplexity=30, learning_rate=200)
+        tsne_results = tsne.fit_transform(data)
+        tsne_expects = tsne.fit_transform(latent_rep)
+        plt.figure(figsize=(12, 6))
+        plt.subplot(121)
+        plt.scatter(tsne_results[:, 0], tsne_results[:, 1], c=labels)
+        plt.subplot(122)
+        plt.scatter(tsne_expects[:, 0], tsne_expects[:, 1], c=labels)
+        plt.colorbar()
+        plt.show()
 
-    with torch.no_grad():
-        for data in testloader:
-            images, labels = data
-            images = images.to(device)
-            latent_rep = model.forward(images).cpu().numpy()
-            pca = PCA(n_components=2)
-            pca.fit(latent_rep)
-            reduced_rep = pca.transform(latent_rep)
-            # plot the reduced representation and color-code points by their true label and predicted label
-            _, predicted = torch.max(model(images).data, 1)
-            for i in range(num_clusters):
-                idx = np.where(predicted.cpu().numpy() == i)[0]
-                axs[1].scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'Predicted Label {i}', alpha=0.5)
-                # reduce the dimensionality of the latent representation using PCA
-    axs[1].legend([f'Predicted Label {i} in epoch {epoch}' for i in range(num_clusters)])
-    axs[1].set_title(f'Predicted Labels in Epoch {epoch}')
-
-    with torch.no_grad():
-        for data in testloader:
-            images, labels = data
-            images = images.to(device)
-            latent_rep = model.forward(images).cpu().numpy()
-            pca = PCA(n_components=2)
-            pca.fit(latent_rep)
-            reduced_rep = pca.transform(latent_rep)
-            # get the predicted labels
-            _, predicted_labels = torch.max(model(images).data, 1)
-            predicted_labels = predicted_labels.cpu().numpy()
-            # get the indices of correct and incorrect predictions
-            correct_indices = np.where(predicted_labels == labels.cpu().numpy())[0]
-            incorrect_indices = np.where(predicted_labels != labels.cpu().numpy())[0]
-            # plot the reduced representation and color-code points by their true label and predicted label
-            axs[2].scatter(reduced_rep[correct_indices, 0], reduced_rep[correct_indices, 1], c='green', label='Correct',alpha=0.5)
-            axs[2].scatter(reduced_rep[incorrect_indices, 0], reduced_rep[incorrect_indices, 1], c='red',label='Incorrect', alpha=0.5)
-            # reduce the dimensionality of the latent representation using PCA
-    axs[2].legend(["Correct", "Incorrect"])
-    axs[2].set_title(f'The contrast of Epoch {epoch}')
-    plt.title(f'The result of Epoch {epoch},acc:{acc},ari:{ari},nmi:{nmi}')
-    plt.savefig(f'./epoch_{epoch}.png')
-    plt.show()
+    # fig, axs = plt.subplots(1, 6, figsize=(90, 15))
+    # with torch.no_grad():
+    #     for data in testloader:
+    #         images, labels = data
+    #         images = images.to(device)
+    #         latent_rep = model.forward(images).cpu().numpy()
+    #         pca = PCA(n_components=2)
+    #         pca.fit(latent_rep)
+    #         reduced_rep = pca.transform(latent_rep)
+    #         reduced_tsne = TSNE(n_components=2,random_state=33,perplexity=10).fit_transform(latent_rep)
+    #         # plot the reduced representation and color-code points by their true label and predicted label
+    #         for i in range(num_clusters):
+    #             idx = np.where(labels == i)[0]
+    #             axs[0].scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'True Label {i}', alpha=0.5)
+    #             axs[3].scatter(reduced_tsne[idx, 0], reduced_tsne[idx, 1], label=f'True Label {i}', alpha=0.5)
+    #         # reduce the dimensionality of the latent representation using PCA
+    # axs[0].legend([f'True Label {i} in epoch {epoch}' for i in range(num_clusters)])
+    # axs[0].set_title(f'True Labels in Epoch {epoch}')
+    # axs[3].legend([f'True Label {i} in epoch {epoch}' for i in range(num_clusters)])
+    # axs[3].set_title(f'True Labels in Epoch {epoch}')
+    #
+    # with torch.no_grad():
+    #     for data in testloader:
+    #         images, labels = data
+    #         images = images.to(device)
+    #         latent_rep = model.forward(images).cpu().numpy()
+    #         tsne = TSNE(n_components=2,perplexity=10)
+    #         pca = PCA(n_components=2)
+    #         pca.fit(latent_rep)
+    #         reduced_rep = pca.transform(latent_rep)
+    #         reduced_tsne = tsne.fit_transform(latent_rep)
+    #         # plot the reduced representation and color-code points by their true label and predicted label
+    #         _, predicted = torch.max(model(images).data, 1)
+    #         for i in range(num_clusters):
+    #             idx = np.where(predicted.cpu().numpy() == i)[0]
+    #             axs[1].scatter(reduced_rep[idx, 0], reduced_rep[idx, 1], label=f'Predicted Label {i}', alpha=0.5)
+    #             axs[4].scatter(reduced_tsne[idx, 0], reduced_tsne[idx, 1], label=f'Predicted Label {i}', alpha=0.5)
+    #             # reduce the dimensionality of the latent representation using PCA
+    # axs[1].legend([f'Predicted Label {i} in epoch {epoch}' for i in range(num_clusters)])
+    # axs[1].set_title(f'Predicted Labels in Epoch {epoch}')
+    # axs[4].legend([f'Predicted Label {i} in epoch {epoch}' for i in range(num_clusters)])
+    # axs[4].set_title(f'Predicted Labels in Epoch {epoch}')
+    #
+    # with torch.no_grad():
+    #     for data in testloader:
+    #         images, labels = data
+    #         images = images.to(device)
+    #         latent_rep = model.forward(images).cpu().numpy()
+    #         tsne = TSNE(n_components=2,perplexity=10)
+    #         pca = PCA(n_components=2)
+    #         pca.fit(latent_rep)
+    #         reduced_tsne = tsne.fit_transform(latent_rep)
+    #         reduced_rep = pca.transform(latent_rep)
+    #         # get the predicted labels
+    #         _, predicted_labels = torch.max(model(images).data, 1)
+    #         predicted_labels = predicted_labels.cpu().numpy()
+    #         # get the indices of correct and incorrect predictions
+    #         correct_indices = np.where(predicted_labels == labels.cpu().numpy())[0]
+    #         incorrect_indices = np.where(predicted_labels != labels.cpu().numpy())[0]
+    #         # plot the reduced representation and color-code points by their true label and predicted label
+    #         axs[2].scatter(reduced_rep[correct_indices, 0], reduced_rep[correct_indices, 1], c='green', label='Correct',alpha=0.5)
+    #         axs[2].scatter(reduced_rep[incorrect_indices, 0], reduced_rep[incorrect_indices, 1], c='red',label='Incorrect', alpha=0.5)
+    #         axs[5].scatter(reduced_tsne[correct_indices, 0], reduced_tsne[correct_indices, 1], c='green', label='Correct',alpha=0.5)
+    #         axs[5].scatter(reduced_tsne[incorrect_indices, 0], reduced_tsne[incorrect_indices, 1], c='red',label='Incorrect', alpha=0.5)
+    #         # reduce the dimensionality of the latent representation using PCA
+    # axs[2].legend(["Correct", "Incorrect"])
+    # axs[2].set_title(f'The contrast of Epoch {epoch}')
+    # axs[5].legend(["Correct", "Incorrect"])
+    # axs[5].set_title(f'The contrast of Epoch {epoch}')
+    # plt.title(f'The result of Epoch {epoch},acc:{acc},ari:{ari},nmi:{nmi}')
+    # plt.savefig(f'./epoch_{epoch}.png')
+    # plt.show()
 
 
 def plot_graph(acc_list, loss_list, nmi_list, ari_list):
@@ -537,7 +576,8 @@ def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, devi
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
             final_loss = running_loss / (batch_idx + 1)
-            print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (epoch_i + 1, batch_idx + 1, final_loss, 100 * correct / total))
+            print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (
+            epoch_i + 1, batch_idx + 1, final_loss, 100 * correct / total))
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
         test(model, testloader, testset, device, epoch_i, final_loss, tl, num_clusters)
     acclist, losslist, arilist, nmilist = tl.getlist()
@@ -619,8 +659,8 @@ def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', default="DEKM", choices=["DEKM", "IDEC", "DCN"])
-    parser.add_argument('--dataset', default="MNIST", choices=["MNIST", "USPS", "SVHN", "CIFAR10", "FashionMNIST", "CIFAR100"])
+    parser.add_argument('--model', default="DCN", choices=["DEKM", "IDEC", "DCN"])
+    parser.add_argument('--dataset', default="CIFAR100", choices=["MNIST", "USPS", "SVHN", "CIFAR10", "FashionMNIST", "CIFAR100"])
     parser.add_argument('--lr', default=0.001, type=float)
     parser.add_argument('--momentum', default=0.9, type=float)
     parser.add_argument('--weight_decay', default=5e-4, type=float)
