@@ -6,7 +6,7 @@ from sklearn.metrics.cluster import adjusted_rand_score, normalized_mutual_info_
 import argparse
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
+# from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 import numpy as np
 
@@ -414,7 +414,7 @@ class IDEC_3(nn.Module):
 
 
 # 测试模型
-def test(model, testloader, testset, device, epoch, loss, tl, num_clusters):
+def test(model, testloader, testset, device, epoch, loss, tl, num_clusters, modelname, dataset):
     model.eval()
     correct = 0
     labels_true = []
@@ -436,11 +436,11 @@ def test(model, testloader, testset, device, epoch, loss, tl, num_clusters):
     print('ARI: %.4f' % ari)
     print('NMI: %.4f' % nmi)
     tl.appendlist(accuracy, loss, ari, nmi)
-    if (epoch % 1) == 0:
-        visualize_clusters(model, testloader, device, epoch, accuracy, ari, nmi, num_clusters)
+    if (epoch % 10) == 9:
+        visualize_clusters(model, testloader, device, epoch, accuracy, ari, nmi, num_clusters, modelname, dataset)
 
 
-def visualize_clusters(model, testloader, device, epoch, acc, ari, nmi, num_clusters):
+def visualize_clusters(model, testloader, device, epoch, acc, ari, nmi, num_clusters, modelname, dataset):
     # get the latent representation of the test data
     model.eval()
     with torch.no_grad():
@@ -464,6 +464,8 @@ def visualize_clusters(model, testloader, device, epoch, acc, ari, nmi, num_clus
         plt.subplot(122)
         plt.scatter(tsne_expects[:, 0], tsne_expects[:, 1], c=labels)
         plt.colorbar()
+        plt.title(f'The {modelname} result in {dataset} of Epoch {epoch},acc:{round(acc,4)},ari:{round(ari,4)},nmi:{round(nmi,4)}')
+        plt.savefig(f'./{modelname}_{dataset}_epoch_{epoch}.png')
         plt.show()
 
     # fig, axs = plt.subplots(1, 6, figsize=(90, 15))
@@ -535,12 +537,9 @@ def visualize_clusters(model, testloader, device, epoch, acc, ari, nmi, num_clus
     # axs[2].set_title(f'The contrast of Epoch {epoch}')
     # axs[5].legend(["Correct", "Incorrect"])
     # axs[5].set_title(f'The contrast of Epoch {epoch}')
-    # plt.title(f'The result of Epoch {epoch},acc:{acc},ari:{ari},nmi:{nmi}')
-    # plt.savefig(f'./epoch_{epoch}.png')
-    # plt.show()
 
 
-def plot_graph(acc_list, loss_list, nmi_list, ari_list):
+def plot_graph(acc_list, loss_list, nmi_list, ari_list, modelname, dataset):
     fig, ax = plt.subplots(2, 2, figsize=(15, 10))
     ax[0][0].plot(loss_list)
     ax[0][0].set_title('Training Loss')
@@ -550,12 +549,13 @@ def plot_graph(acc_list, loss_list, nmi_list, ari_list):
     ax[1][0].set_title('NMI Score')
     ax[1][1].plot(ari_list)
     ax[1][1].set_title('ARI Score')
-    plt.savefig('./result.png')
+    name = modelname + '_' + dataset + '_./result.png'
+    plt.savefig(name)
     plt.show()
 
 
 # 训练模型
-def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch, num_clusters):
+def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch, num_clusters, modelname, dataset):
     tl = testlist()
     for epoch_i in range(epoch):
         running_loss = 0.0
@@ -579,12 +579,12 @@ def DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, devi
             print('[Epoch %d, Batch %5d] Loss: %.3f | Accuracy: %.2f %%' % (
             epoch_i + 1, batch_idx + 1, final_loss, 100 * correct / total))
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
-        test(model, testloader, testset, device, epoch_i, final_loss, tl, num_clusters)
+        test(model, testloader, testset, device, epoch_i, final_loss, tl, num_clusters, modelname, dataset)
     acclist, losslist, arilist, nmilist = tl.getlist()
-    plot_graph(acclist, losslist, nmilist, nmilist)
+    return acclist, losslist, arilist, nmilist
 
 
-def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch, num_clusters):
+def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch, num_clusters, modelname, dataset):
     tl = testlist()
     model.init_centers(trainloader)
     for epoch_i in range(epoch):
@@ -609,12 +609,12 @@ def DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch,
                 epoch_i + 1, batch_idx + 1, final_loss, 100 * correct / total))
         # Evaluate the model after every epoch
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
-        test(model, testloader, testset, device, epoch_i, final_loss, tl, num_clusters)
+        test(model, testloader, testset, device, epoch_i, final_loss, tl, num_clusters, modelname, dataset)
     acclist, losslist, arilist, nmilist = tl.getlist()
-    plot_graph(acclist, losslist, nmilist, nmilist)
+    return acclist, losslist, arilist, nmilist
 
 
-def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha, num_clusters):
+def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha, num_clusters, modelname, dataset):
     tl = testlist()
     model.init_centers(trainloader)
     for epoch_i in range(epoch):
@@ -652,19 +652,19 @@ def IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch,
                 epoch_i + 1, batch_idx + 1, final_loss, 100 * correct / total))
         # Evaluate the model after every epoch
         print("[Epoch %d] Evaluating model..." % (epoch_i + 1))
-        test(model, testloader, testset, device, epoch_i, final_loss, tl, num_clusters)
+        test(model, testloader, testset, device, epoch_i, final_loss, tl, num_clusters, modelname, dataset)
     acclist, losslist, arilist, nmilist = tl.getlist()
-    plot_graph(acclist, losslist, nmilist, nmilist)
+    return acclist, losslist, arilist, nmilist
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', default="DCN", choices=["DEKM", "IDEC", "DCN"])
-    parser.add_argument('--dataset', default="CIFAR100", choices=["MNIST", "USPS", "SVHN", "CIFAR10", "FashionMNIST", "CIFAR100"])
+    parser.add_argument('--dataset', default="MNIST", choices=["MNIST", "USPS", "SVHN", "CIFAR10", "FashionMNIST", "CIFAR100"])
     parser.add_argument('--lr', default=0.001, type=float)
     parser.add_argument('--momentum', default=0.9, type=float)
     parser.add_argument('--weight_decay', default=5e-4, type=float)
-    parser.add_argument('--epoch', default=100, type=int)
+    parser.add_argument('--epoch', default=1, type=int)
     parser.add_argument('--alpha', default=1.0, type=float)
     parser.add_argument('--num_clusters', default=10, type=int)
     args = parser.parse_args()
@@ -706,8 +706,19 @@ if __name__ == '__main__':
     testloader = testloader(args.dataset)
     testset = testset(args.dataset)
     if args.model == "DEKM":
-        DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch, num_clusters)
+        acclist, losslist, arilist, nmilist = DEKMtrain(model, trainloader, testloader, optimizer, testset, device, epoch, num_clusters, args.model, args.dataset)
     elif args.model == "DCN":
-        DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch, num_clusters)
+        acclist, losslist, arilist, nmilist = DCNtrain(model, trainloader, testloader, criterion, optimizer, testset, device, epoch, num_clusters, args.model, args.dataset)
     elif args.model == "IDEC":
-        IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha, num_clusters)
+        acclist, losslist, arilist, nmilist = IDECtrain(model, trainloader, testloader, optimizer, testset, device, epoch, alpha, num_clusters, args.model, args.dataset)
+    plot_graph(acclist, losslist, arilist, nmilist, args.model, args.dataset)
+    s = ''
+    k = './' + args.model + '_' + args.dataset + '_result.txt'
+    b1 = [acclist, losslist, arilist, nmilist]
+    for i in range(0, len(acclist)):
+        s = s + str(acclist[i]) + ","
+        s = s + str(losslist[i]) + ","
+        s = s + str(arilist[i]) + ","
+        s = s + str(nmilist[i]) + "\n"
+    with open(k, 'w') as f:
+        f.write(s)
