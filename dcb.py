@@ -664,7 +664,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', default=0.001, type=float)
     parser.add_argument('--momentum', default=0.9, type=float)
     parser.add_argument('--weight_decay', default=5e-4, type=float)
-    parser.add_argument('--epoch', default=1, type=int)
+    parser.add_argument('--epoch', default=100, type=int)
     parser.add_argument('--alpha', default=1.0, type=float)
     parser.add_argument('--num_clusters', default=10, type=int)
     args = parser.parse_args()
