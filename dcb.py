@@ -549,7 +549,7 @@ def plot_graph(acc_list, loss_list, nmi_list, ari_list, modelname, dataset):
     ax[1][0].set_title('NMI Score')
     ax[1][1].plot(ari_list)
     ax[1][1].set_title('ARI Score')
-    name = modelname + '_' + dataset + '_./result.png'
+    name = './' + modelname + '_' + dataset + '_result.png'
     plt.savefig(name)
     plt.show()
 
