@@ -35,7 +35,7 @@ here is the result:
 ![image1](./result/DEKM_USPS_result.png)
 
 ## Thanks
-*Chatgpt*  
+ 
 *nvidia cuda*  
 *pytorch*  
 *python*  
